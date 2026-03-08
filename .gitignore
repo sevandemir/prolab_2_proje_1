@@ -1,0 +1,46 @@
+# ─── Derleme çıktıları ────────────────────────────────────────────────────────
+main.exe
+*.o
+*.out
+*.a
+*.so
+*.dll
+
+# ─── CLion (senin IDE'n) ──────────────────────────────────────────────────────
+.idea/
+cmake-build-debug/
+cmake-build-release/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+
+# ─── VS Code ──────────────────────────────────────────────────────────────────
+.vscode/
+
+# ─── Visual Studio ────────────────────────────────────────────────────────────
+.vs/
+*.vcxproj
+*.vcxproj.filters
+*.sln
+*.suo
+*.user
+Debug/
+Release/
+
+# ─── Code::Blocks ─────────────────────────────────────────────────────────────
+*.cbp
+*.layout
+*.depend
+
+# ─── Dev-C++ ──────────────────────────────────────────────────────────────────
+*.dev
+
+# ─── Geçici & sistem dosyaları ────────────────────────────────────────────────
+*.tmp
+*.log
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
