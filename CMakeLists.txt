@@ -8,4 +8,17 @@ add_executable(prolab_2_proje_1 src/main.c
         src/terminal/terminal_windows.c
         src/terminal/terminal.h
         src/undo/undo_stack.c
-        src/undo/undo_stack.h)
+        src/undo/undo_stack.h
+        src/editor/buffer.c
+        src/editor/buffer.h
+        src/editor/cursor.c
+        src/editor/cursor.h
+        src/editor/search.h
+        src/ui/toolbox.c
+        src/ui/toolbox.h
+        src/ui/renderer.h
+        src/ui/renderer.c
+        src/io/file_io.h
+        src/io/file_io.c
+        src/io/file_manager.h
+        src/io/file_manager.c)
