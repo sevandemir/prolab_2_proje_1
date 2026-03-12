@@ -7,6 +7,7 @@
 #include <termios.h>
 #include <sys/ioctl.h>
 #include <locale.h>
+#include <sys/select.h>
 
 // ─── İç değişkenler ───────────────────────────────────────────────────────────
 static struct termios orig_termios;
@@ -24,7 +25,7 @@ void term_enable_raw_mode() {
     // Giriş bayrakları
     raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
     // Çıkış bayrakları
-    raw.c_oflag &= ~(OPOST);
+
     // Kontrol bayrakları
     raw.c_cflag |= (CS8);
     // Yerel bayraklar: ECHO kapalı, ICANON kapalı (raw), sinyaller kapalı
@@ -56,55 +57,62 @@ int term_read_key() {
     // Bunlar zaten doğru değerle geliyor, direkt döndür
     // Özel tuş kontrolü: ESC ile başlayan sequence
     if (c == 27) {
-        unsigned char seq[4] = {0};
+        // VTIME ile non-blocking okuma
+        struct termios t;
+        tcgetattr(STDIN_FILENO, &t);
+        t.c_cc[VMIN]  = 0;
+        t.c_cc[VTIME] = 1;  // 100ms
+        tcsetattr(STDIN_FILENO, TCSANOW, &t);
 
-        // Sequence geldi mi kontrol et
-        if (read(STDIN_FILENO, &seq[0], 1) != 1) return KEY_ESC;
+        unsigned char seq[4] = {0};
+        int n = read(STDIN_FILENO, &seq[0], 1);
+
+        // Raw mode'a geri dön
+        t.c_cc[VMIN]  = 1;
+        t.c_cc[VTIME] = 0;
+        tcsetattr(STDIN_FILENO, TCSANOW, &t);
+
+        if (n <= 0) return KEY_ESC;  // Ek byte gelmedi → düz ESC
+
         if (read(STDIN_FILENO, &seq[1], 1) != 1) return KEY_ESC;
 
         if (seq[0] == '[') {
-            // Sayısal sequence (örn: [1;5C = CTRL+Sağ)
-            if (seq[1] >= '0' && seq[1] <= '9') {
-                read(STDIN_FILENO, &seq[2], 1);
-
-                if (seq[1] == '3' && seq[2] == '~') return KEY_DELETE;
-
-                // CTRL + Yön: ESC[1;5A/B/C/D
-                if (seq[1] == '1' && seq[2] == ';') {
-                    unsigned char mod, dir;
-                    read(STDIN_FILENO, &mod,  1);
-                    read(STDIN_FILENO, &dir,  1);
-
-                    if (mod == '5') { // CTRL
-                        if (dir == 'A') return KEY_CTRL_UP;
-                        if (dir == 'B') return KEY_CTRL_DOWN;
-                        if (dir == 'C') return KEY_CTRL_RIGHT;
-                        if (dir == 'D') return KEY_CTRL_LEFT;
-                    }
-                    if (mod == '2') { // SHIFT
-                        if (dir == 'A') return KEY_SHIFT_UP;
-                        if (dir == 'B') return KEY_SHIFT_DOWN;
-                        if (dir == 'C') return KEY_SHIFT_RIGHT;
-                        if (dir == 'D') return KEY_SHIFT_LEFT;
-                    }
-                    if (mod == '6') { // CTRL + SHIFT
-                        if (dir == 'C') return KEY_CTRL_SHIFT_RIGHT;
-                        if (dir == 'D') return KEY_CTRL_SHIFT_LEFT;
-                    }
-                }
-            }
-
-            // Normal yön tuşları: ESC[A/B/C/D
             switch (seq[1]) {
                 case 'A': return KEY_UP;
                 case 'B': return KEY_DOWN;
                 case 'C': return KEY_RIGHT;
                 case 'D': return KEY_LEFT;
             }
+            // Sayısal sequence
+            if (seq[1] >= '0' && seq[1] <= '9') {
+                unsigned char seq2;
+                read(STDIN_FILENO, &seq2, 1);
+                if (seq[1] == '3' && seq2 == '~') return KEY_DELETE;
+                if (seq[1] == '1' && seq2 == ';') {
+                    unsigned char mod, dir;
+                    read(STDIN_FILENO, &mod, 1);
+                    read(STDIN_FILENO, &dir, 1);
+                    if (mod == '5') {
+                        if (dir == 'A') return KEY_CTRL_UP;
+                        if (dir == 'B') return KEY_CTRL_DOWN;
+                        if (dir == 'C') return KEY_CTRL_RIGHT;
+                        if (dir == 'D') return KEY_CTRL_LEFT;
+                    }
+                    if (mod == '2') {
+                        if (dir == 'A') return KEY_SHIFT_UP;
+                        if (dir == 'B') return KEY_SHIFT_DOWN;
+                        if (dir == 'C') return KEY_SHIFT_RIGHT;
+                        if (dir == 'D') return KEY_SHIFT_LEFT;
+                    }
+                    if (mod == '6') {
+                        if (dir == 'C') return KEY_CTRL_SHIFT_RIGHT;
+                        if (dir == 'D') return KEY_CTRL_SHIFT_LEFT;
+                    }
+                }
+            }
         }
         return KEY_ESC;
     }
-
     // CTRL + Backspace (genellikle 127 veya 8 gelir)
     if (c == 127) return KEY_BACKSPACE;
     if (c == 31)  return KEY_CTRL_BACKSPACE; // CTRL+Backspace bazı terminallerde

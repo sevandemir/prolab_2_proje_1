@@ -1,8 +1,14 @@
-//
-// Created by muhammed-servan on 3/9/26.
-//
+#ifndef TOOLBOX_H
+#define TOOLBOX_H
 
-#ifndef PROLAB_2_PROJE_1_TOOLBOX_H
-#define PROLAB_2_PROJE_1_TOOLBOX_H
+#include "../terminal/terminal.h"
 
-#endif //PROLAB_2_PROJE_1_TOOLBOX_H
+// Toolbox'ta gösterilecek menü öğesi
+typedef struct {
+    const char *label;      // Görünen isim: "Dosya Aç"
+    const char *shortcut;   // Kısayol: "CTRL+O"
+} ToolboxItem;
+
+void toolbox_render(int terminal_cols);
+
+#endif // TOOLBOX_H

@@ -1,8 +1,32 @@
-//
-// Created by muhammed-servan on 3/9/26.
-//
+#ifndef BUFFER_H
+#define BUFFER_H
 
-#ifndef PROLAB_2_PROJE_1_BUFFER_H
-#define PROLAB_2_PROJE_1_BUFFER_H
+typedef struct node {
+    char        letter;
+    struct node *prev;
+    struct node *next;
+} node_x;
 
-#endif //PROLAB_2_PROJE_1_BUFFER_H
+typedef struct line {
+    node_x      *dummynode;
+    struct line *prevline;
+    struct line *nextline;
+} line_x;
+
+extern line_x *headline;
+extern node_x *cursor;
+extern line_x *currentline;
+
+node_x *createnewnode(char letter);
+line_x *createnewline(void);
+void    letterEntry(char entry);
+void    cursorToLeft(void);
+void    cursorToRight(void);
+void    cursorToUp(void);
+void    cursorToDown(void);
+int     cursorPosition(void);
+void    mergeLines(void);
+void    deleteLetter(void);
+void    addnewline(void);
+
+#endif

@@ -1,24 +1,32 @@
-cmake_minimum_required(VERSION 4.1)
+cmake_minimum_required(VERSION 3.10)
 project(prolab_2_proje_1 C)
 
-set(CMAKE_C_STANDARD 23)
+set(CMAKE_C_STANDARD 11)
 
-add_executable(prolab_2_proje_1 src/main.c
-        src/terminal/terminal_linux.c
-        src/terminal/terminal_windows.c
-        src/terminal/terminal.h
+set(SOURCES
+        src/main.c
         src/undo/undo_stack.c
-        src/undo/undo_stack.h
         src/editor/buffer.c
-        src/editor/buffer.h
         src/editor/cursor.c
-        src/editor/cursor.h
-        src/editor/search.h
+        src/editor/search.c
+        src/editor/selection.c
+        src/editor/editor.c
         src/ui/toolbox.c
-        src/ui/toolbox.h
-        src/ui/renderer.h
         src/ui/renderer.c
-        src/io/file_io.h
         src/io/file_io.c
-        src/io/file_manager.h
-        src/io/file_manager.c)
+        src/io/file_manager.c
+)
+
+if(WIN32)
+    list(APPEND SOURCES src/terminal/terminal_windows.c)
+else()
+    list(APPEND SOURCES src/terminal/terminal_linux.c)
+endif()
+
+add_executable(prolab_2_proje_1 ${SOURCES})
+
+target_include_directories(prolab_2_proje_1 PRIVATE src)
+
+if(WIN32)
+    target_link_libraries(prolab_2_proje_1 kernel32)
+endif()

@@ -1,8 +1,9 @@
-//
-// Created by muhammed-servan on 3/9/26.
-//
+#ifndef RENDERER_H
+#define RENDERER_H
 
-#ifndef PROLAB_2_PROJE_1_RENDERER_H
-#define PROLAB_2_PROJE_1_RENDERER_H
+#include "../editor/buffer.h"
+#include "../terminal/terminal.h"
 
-#endif //PROLAB_2_PROJE_1_RENDERER_H
+void renderer_draw(int terminal_rows, int terminal_cols);
+
+#endif // RENDERER_H
