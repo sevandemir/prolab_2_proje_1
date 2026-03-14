@@ -1,4 +1,9 @@
-#ifdef _WIN32   // Sadece Windows'ta derlenir
+#ifdef _WIN32
+
+// Eski MinGW için tanımla
+#ifndef ENABLE_VIRTUAL_TERMINAL_PROCESSING
+#define ENABLE_VIRTUAL_TERMINAL_PROCESSING 0x0004
+#endif
 
 #include "terminal.h"
 #include <stdio.h>
