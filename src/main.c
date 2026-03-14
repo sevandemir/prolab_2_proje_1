@@ -7,7 +7,7 @@
 
 int main(void) {
     term_enable_raw_mode();
-    term_hide_cursor();
+
     term_cursor_blink_on();
 
     headline    = createnewline();

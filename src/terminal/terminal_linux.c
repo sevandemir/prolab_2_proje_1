@@ -123,7 +123,7 @@ int term_read_key() {
 // ─── Ekran işlemleri ──────────────────────────────────────────────────────────
 
 void term_clear_screen() {
-    write(STDOUT_FILENO, "\033[2J\033[H", 7);
+    write(STDOUT_FILENO, "\033[5 q", 5);
 }
 
 void term_clear_line() {
@@ -166,8 +166,7 @@ void term_reset_color() {
 // ─── İmleç efekti ─────────────────────────────────────────────────────────────
 
 void term_cursor_blink_on() {
-    write(STDOUT_FILENO, "\033[?12h", 6);  // Yanıp sönen dikey çizgi
-    write(STDOUT_FILENO, "\033[6 q",  5);  // Bar imleci
+    write(STDOUT_FILENO, "\033[5 q", 5);  // yanıp sönen dikey çizgi
 }
 
 void term_cursor_blink_off() {

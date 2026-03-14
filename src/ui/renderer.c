@@ -12,31 +12,23 @@ void renderer_draw(int terminal_rows, int terminal_cols) {
     line_x *templine = headline;
     int line_num = 1;
     int max_lines = terminal_rows - 5;
+    int cursor_row = 4;
+    int cursor_col = 7;
 
     while (templine != NULL && line_num <= max_lines) {
         term_clear_line();
         printf("%3d | ", line_num);
 
-        if (templine == currentline && cursor == templine->dummynode) {
-            printf("\033[7m \033[0m");
-        }
-
         node_x *tempnode = templine->dummynode->next;
         while (tempnode != NULL) {
-            if (tempnode == cursor) {
-                printf("\033[7m%c\033[0m", tempnode->letter);
-            } else {
-                printf("%c", tempnode->letter);
-            }
+            printf("%c", tempnode->letter);
             tempnode = tempnode->next;
         }
 
-        if (templine == currentline && cursor != templine->dummynode) {
-            node_x *last = templine->dummynode;
-            while (last->next != NULL) last = last->next;
-            if (cursor == last) {
-                printf("\033[7m \033[0m");
-            }
+        // İmleç konumunu hesapla
+        if (templine == currentline) {
+            cursor_row = line_num + 3; // toolbox 3 satır kaplar
+            cursor_col = 7 + cursorPosition();
         }
 
         printf("\r\n");
@@ -49,6 +41,8 @@ void renderer_draw(int terminal_rows, int terminal_cols) {
     for (int i = 0; i < terminal_cols; i++) printf("-");
     printf("\r\n");
     term_clear_line();
-    // GEÇİCİ DEBUG
     printf(" Satir: %d  |  ESC: Cikis\r\n", line_num - 1);
+
+    // 4. İmleci doğru konuma taşı
+    term_set_cursor(cursor_row, cursor_col);
 }
