@@ -10,5 +10,5 @@ typedef struct {
 } ToolboxItem;
 
 void toolbox_render(int terminal_cols);
-
+int toolbox_row_count(int terminal_cols);
 #endif // TOOLBOX_H

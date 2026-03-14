@@ -7,6 +7,7 @@
 
 int main(void) {
     term_enable_raw_mode();
+    write(STDOUT_FILENO, "\033[?1049h", 8);  // alternate screen'e gir
 
     term_cursor_blink_on();
 
@@ -25,7 +26,7 @@ int main(void) {
 
         int key = term_read_key();
 
-        if (key == 27) {
+        if (key == KEY_ESC) {
             running = 0;
             continue;
         }
@@ -52,14 +53,13 @@ int main(void) {
         }
     }
 
-    // Temizlik - döngü dışında
+    // Temizlik
     undo_stack_destroy(undo);
     term_cursor_blink_off();
     term_reset_color();
     term_show_cursor();
     term_disable_raw_mode();
-    term_clear_screen();
-
-    printf("Cikis yapildi.\n");
+    write(STDOUT_FILENO, "\033[?1049l", 8);  // alternate screen'den çık
+    write(STDOUT_FILENO, "Cikis yapildi.\n", 15);
     return 0;
 }
