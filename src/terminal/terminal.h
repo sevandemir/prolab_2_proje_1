@@ -25,7 +25,7 @@
 #define KEY_CTRL_SHIFT_LEFT   1014
 
 // Fonksiyon tuşları
-#define KEY_BACKSPACE   8
+#define KEY_BACKSPACE   127
 #define KEY_ENTER       13
 #define KEY_ESC         27
 #define KEY_TAB         9

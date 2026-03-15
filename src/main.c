@@ -8,6 +8,27 @@
 #include "editor/cursor.h"
 #include "editor/selection.h"
 #include "editor/editor.h"
+#include "editor/search.h"
+
+static void read_input(char *buf, int max_len, int terminal_rows, int terminal_cols) {
+    int pos = 0;
+    buf[0] = '\0';
+    while (1) {
+        renderer_draw(terminal_rows, terminal_cols);
+        int key = term_read_key();
+        if (key == KEY_ESC) {
+            buf[0] = '\0';
+            return;
+        }
+        if (key == KEY_ENTER) return;
+        if (key == KEY_BACKSPACE) {
+            if (pos > 0) buf[--pos] = '\0';
+        } else if (key >= 32 && key <= 126 && pos < max_len - 1) {
+            buf[pos++] = (char)key;
+            buf[pos]   = '\0';
+        }
+    }
+}
 
 int main(void) {
     term_enable_raw_mode();
@@ -31,7 +52,11 @@ int main(void) {
         int key = term_read_key();
 
         if (key == KEY_ESC) {
-            running = 0;
+            if (search_active || replace_active) {
+                search_clear();
+            } else {
+                running = 0;
+            }
             continue;
         }
 
@@ -56,6 +81,37 @@ int main(void) {
             case KEY_CTRL_X: cutSelection();   break;
             case KEY_CTRL_V: pasteClipboard(); break;
             case KEY_CTRL_Z: performUndo();    break;
+            case KEY_CTRL_F: {
+                search_active = 1;
+                read_input(search_query, sizeof(search_query), rows, cols);
+                if (search_query[0] != '\0') {
+                    search_find(search_query);
+                    if (search_matches != NULL) search_next();
+                } else {
+                    search_clear();
+                }
+                break;
+            }
+            case KEY_CTRL_G: {
+                if (search_active && search_matches != NULL) {
+                    search_next();
+                }
+                break;
+            }
+            case KEY_CTRL_H: {
+                search_active  = 1;
+                replace_active = 0;
+                read_input(search_query, sizeof(search_query), rows, cols);
+                if (search_query[0] == '\0') { search_clear(); break; }
+                search_active  = 0;
+                replace_active = 1;
+                read_input(replace_query, sizeof(replace_query), rows, cols);
+                if (replace_query[0] != '\0') {
+                    search_replace_all(search_query, replace_query);
+                }
+                search_clear();
+                break;
+            }
             default:
                 if (key >= 32 && key <= 126)
                     letterEntry((char)key);

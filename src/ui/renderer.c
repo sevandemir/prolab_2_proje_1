@@ -1,6 +1,7 @@
 #include "renderer.h"
 #include "toolbox.h"
 #include "../editor/selection.h"
+#include "../editor/search.h"
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
@@ -28,7 +29,7 @@ static void r_flush() {
 
 void renderer_draw(int terminal_rows, int terminal_cols) {
     render_pos = 0;
-    r_write("\033[?25l");  // imleci gizle
+    r_write("\033[?25l");
     r_write("\033[H");
     r_flush();
 
@@ -42,7 +43,7 @@ void renderer_draw(int terminal_rows, int terminal_cols) {
         current_line_num++;
     }
 
-    static int scroll_offset  = 0;
+    static int scroll_offset   = 0;
     static int h_scroll_offset = 0;
 
     if (current_line_num > scroll_offset + max_lines)
@@ -50,13 +51,13 @@ void renderer_draw(int terminal_rows, int terminal_cols) {
     if (current_line_num <= scroll_offset)
         scroll_offset = current_line_num - 1;
 
-    // Yatay scroll: aktif satır için imleç pozisyonuna göre ayarla
-    int text_cols = terminal_cols - 6;  // "NNN | " için 6 karakter ayrıldı
+    int text_cols = terminal_cols - 6;
     int cur_pos   = cursorPosition();
     if (cur_pos >= h_scroll_offset + text_cols)
         h_scroll_offset = cur_pos - text_cols + 1;
     else if (cur_pos < h_scroll_offset + text_cols)
         h_scroll_offset = cur_pos > text_cols ? cur_pos - text_cols : 0;
+
     // 1. Toolbox
     toolbox_render(terminal_cols);
     fflush(stdout);
@@ -72,6 +73,7 @@ void renderer_draw(int terminal_rows, int terminal_cols) {
     int display_line = 1;
     int cursor_row   = toolbox_rows + 2;
     int cursor_col   = 7;
+    int line_idx     = scroll_offset;
 
     char tmp[64];
     while (templine != NULL && display_line <= max_lines) {
@@ -79,16 +81,16 @@ void renderer_draw(int terminal_rows, int terminal_cols) {
         snprintf(tmp, sizeof(tmp), "%3d | ", line_num);
         r_write(tmp);
 
-        // Aktif satırda yatay scroll uygula, diğer satırlarda başından göster
-        int skip = (templine == currentline) ? h_scroll_offset : 0;
+        int skip  = (templine == currentline) ? h_scroll_offset : 0;
         int shown = 0;
         node_x *tempnode = templine->dummynode->next;
 
-        // skip kadar node atla
         int skipped = 0;
+        int col_idx = 0;
         while (tempnode != NULL && skipped < skip) {
             tempnode = tempnode->next;
             skipped++;
+            col_idx++;
         }
 
         while (tempnode != NULL && shown < text_cols) {
@@ -96,11 +98,16 @@ void renderer_draw(int terminal_rows, int terminal_cols) {
                 r_write("\033[43m");
                 r_char(tempnode->letter);
                 r_write("\033[0m");
+            } else if (search_active && search_contains(line_idx, col_idx)) {
+                r_write("\033[44m");
+                r_char(tempnode->letter);
+                r_write("\033[0m");
             } else {
                 r_char(tempnode->letter);
             }
             tempnode = tempnode->next;
             shown++;
+            col_idx++;
         }
 
         if (templine == currentline) {
@@ -112,9 +119,9 @@ void renderer_draw(int terminal_rows, int terminal_cols) {
         templine = templine->nextline;
         line_num++;
         display_line++;
+        line_idx++;
     }
 
-    // Kalan satırları temizle
     for (int i = display_line; i <= max_lines; i++)
         r_write("\033[2K\r\n");
 
@@ -122,13 +129,22 @@ void renderer_draw(int terminal_rows, int terminal_cols) {
     r_write("\033[2K");
     for (int i = 0; i < terminal_cols; i++) r_char('-');
     r_write("\r\n\033[2K");
-    snprintf(tmp, sizeof(tmp), " Satir: %d  |  ESC: Cikis", current_line_num);
-    r_write(tmp);
+
+    if (replace_active) {
+        snprintf(tmp, sizeof(tmp), " Yeni kelime: %s", replace_query);
+        r_write(tmp);
+    } else if (search_active) {
+        snprintf(tmp, sizeof(tmp), " Ara: %s", search_query);
+        r_write(tmp);
+    } else {
+        snprintf(tmp, sizeof(tmp), " Satir: %d  |  ESC: Cikis", current_line_num);
+        r_write(tmp);
+    }
 
     // 4. İmleci konumlandır
     snprintf(tmp, sizeof(tmp), "\033[%d;%dH", cursor_row, cursor_col);
     r_write(tmp);
 
     r_flush();
-    write(STDOUT_FILENO, "\033[?25h", 6);  // imleci göster
+    write(STDOUT_FILENO, "\033[?25h", 6);
 }

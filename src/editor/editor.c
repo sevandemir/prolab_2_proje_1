@@ -201,55 +201,29 @@ void cutSelection() {
         a_before_b = line_before(a_line, b_line);
 
     if (!a_before_b) {
-        line_x *tl = a_line;
-        a_line = b_line;
-        b_line = tl;
-        node_x *tn = a_node;
-        a_node = b_node;
-        b_node = tn;
+        line_x *tl = a_line; a_line = b_line; b_line = tl;
+        node_x *tn = a_node; a_node = b_node; b_node = tn;
     }
 
     // Başlangıç pozisyonunu hesapla
     int start_line_idx = 0;
     line_x *tl = headline;
-    while (tl != NULL && tl != a_line) {
-        start_line_idx++;
-        tl = tl->nextline;
-    }
+    while (tl != NULL && tl != a_line) { start_line_idx++; tl = tl->nextline; }
 
     int start_col = 0;
     node_x *nd = a_line->dummynode;
-    while (nd != a_node) {
-        start_col++;
-        nd = nd->next;
-    }
+    while (nd != a_node) { start_col++; nd = nd->next; }
 
-    // Kesilen metni clipboard'a kopyala
-    copySelection();
-
-    // Clipboard içeriğini text olarak encode et
-    int total_len = 0;
-    ClipLine *tmp_cl = clipboard;
-    // clipboard static, doğrudan erişemeyiz — clipboard içeriğini tekrar okuyalım
-    // sel_start/sel_end'den okuyalım
-    sel_start.line = a_line;
-    sel_start.node = a_node;
-    sel_end.line = b_line;
-    sel_end.node = b_node;
-    selection_active = 1;
-
-    // Kesilen metni string olarak al
+    // Kesilen metni hem clipboard'a hem string'e yaz
+    clipboard_clear();
     int len = 0;
     line_x *cur_line = a_line;
     while (cur_line != NULL) {
         node_x *sn = (cur_line == a_line) ? a_node->next : cur_line->dummynode->next;
         node_x *en = (cur_line == b_line) ? b_node->next : NULL;
         node_x *tmp = sn;
-        while (tmp != en) {
-            len++;
-            tmp = tmp->next;
-        }
-        if (cur_line != b_line) len++; // \n için
+        while (tmp != en) { len++; tmp = tmp->next; }
+        if (cur_line != b_line) len++;
         if (cur_line == b_line) break;
         cur_line = cur_line->nextline;
     }
@@ -260,24 +234,42 @@ void cutSelection() {
     while (cur_line != NULL) {
         node_x *sn = (cur_line == a_line) ? a_node->next : cur_line->dummynode->next;
         node_x *en = (cur_line == b_line) ? b_node->next : NULL;
+
+        // Clipboard'a ekle
+        int line_len = 0;
         node_x *tmp = sn;
-        while (tmp != en) {
-            cut_text[pos++] = tmp->letter;
-            tmp = tmp->next;
-        }
+        while (tmp != en) { line_len++; tmp = tmp->next; }
+        char *clip_text = malloc(line_len + 1);
+        int ci = 0;
+        tmp = sn;
+        while (tmp != en) { clip_text[ci++] = tmp->letter; cut_text[pos++] = tmp->letter; tmp = tmp->next; }
+        clip_text[ci] = '\0';
+
+        ClipLine *cl = malloc(sizeof(ClipLine));
+        cl->text = clip_text;
+        cl->next = NULL;
+        if (clipboard == NULL) clipboard = cl;
+        else { ClipLine *last = clipboard; while (last->next != NULL) last = last->next; last->next = cl; }
+
         if (cur_line != b_line) cut_text[pos++] = '\n';
         if (cur_line == b_line) break;
         cur_line = cur_line->nextline;
     }
     cut_text[pos] = '\0';
 
-    // "start_line:start_col:cut_text" formatında encode et
+    // Encode et
     char header[64];
     snprintf(header, sizeof(header), "%d:%d:", start_line_idx, start_col);
-    char *encoded = malloc(strlen(header) + strlen(cut_text) + 1);
+    char *encoded = malloc(strlen(header) + len + 1);
     strcpy(encoded, header);
-    strcat(encoded, cut_text);
+    memcpy(encoded + strlen(header), cut_text, len + 1);
 
+    // Sil
+    sel_start.line = a_line;
+    sel_start.node = a_node;
+    sel_end.line   = b_line;
+    sel_end.node   = b_node;
+    selection_active = 1;
     undo_enabled = 0;
     deleteSelection();
     undo_enabled = 1;
