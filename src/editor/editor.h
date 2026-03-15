@@ -1,8 +1,10 @@
-//
-// Created by muhammed-servan on 3/9/26.
-//
+#ifndef EDITOR_H
+#define EDITOR_H
 
-#ifndef PROLAB_2_PROJE_1_BUFFER_H
-#define PROLAB_2_PROJE_1_BUFFER_H
+void deleteSelection();
+void copySelection();
+void cutSelection();
+void pasteClipboard();
+void performUndo();
 
-#endif //PROLAB_2_PROJE_1_BUFFER_H
+#endif

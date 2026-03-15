@@ -3,6 +3,7 @@
 
 #include "../editor/buffer.h"
 #include "../terminal/terminal.h"
+#include "../editor/cursor.h"
 
 void renderer_draw(int terminal_rows, int terminal_cols);
 

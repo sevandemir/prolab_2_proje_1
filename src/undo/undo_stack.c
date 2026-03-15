@@ -2,6 +2,8 @@
 #include <string.h>
 #include "undo_stack.h"
 
+UndoStack *undo = NULL;
+
 UndoStack *undo_stack_create() {
     UndoStack *stack = malloc(sizeof(UndoStack));
     stack->top  = NULL;
@@ -25,7 +27,7 @@ UndoRecord *undo_pop(UndoStack *stack) {
     UndoRecord *rec = stack->top;
     stack->top      = rec->next;
     stack->size--;
-    return rec;   // çağıran undo_record_destroy ile free etmeli
+    return rec;
 }
 
 void undo_record_destroy(UndoRecord *rec) {

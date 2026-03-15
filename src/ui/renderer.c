@@ -1,5 +1,6 @@
 #include "renderer.h"
 #include "toolbox.h"
+#include "../editor/selection.h"
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
@@ -41,12 +42,21 @@ void renderer_draw(int terminal_rows, int terminal_cols) {
         current_line_num++;
     }
 
-    static int scroll_offset = 0;
+    static int scroll_offset  = 0;
+    static int h_scroll_offset = 0;
+
     if (current_line_num > scroll_offset + max_lines)
         scroll_offset = current_line_num - max_lines;
     if (current_line_num <= scroll_offset)
         scroll_offset = current_line_num - 1;
 
+    // Yatay scroll: aktif satır için imleç pozisyonuna göre ayarla
+    int text_cols = terminal_cols - 6;  // "NNN | " için 6 karakter ayrıldı
+    int cur_pos   = cursorPosition();
+    if (cur_pos >= h_scroll_offset + text_cols)
+        h_scroll_offset = cur_pos - text_cols + 1;
+    else if (cur_pos < h_scroll_offset + text_cols)
+        h_scroll_offset = cur_pos > text_cols ? cur_pos - text_cols : 0;
     // 1. Toolbox
     toolbox_render(terminal_cols);
     fflush(stdout);
@@ -69,15 +79,33 @@ void renderer_draw(int terminal_rows, int terminal_cols) {
         snprintf(tmp, sizeof(tmp), "%3d | ", line_num);
         r_write(tmp);
 
+        // Aktif satırda yatay scroll uygula, diğer satırlarda başından göster
+        int skip = (templine == currentline) ? h_scroll_offset : 0;
+        int shown = 0;
         node_x *tempnode = templine->dummynode->next;
-        while (tempnode != NULL) {
-            r_char(tempnode->letter);
+
+        // skip kadar node atla
+        int skipped = 0;
+        while (tempnode != NULL && skipped < skip) {
             tempnode = tempnode->next;
+            skipped++;
+        }
+
+        while (tempnode != NULL && shown < text_cols) {
+            if (selection_contains(templine, tempnode)) {
+                r_write("\033[43m");
+                r_char(tempnode->letter);
+                r_write("\033[0m");
+            } else {
+                r_char(tempnode->letter);
+            }
+            tempnode = tempnode->next;
+            shown++;
         }
 
         if (templine == currentline) {
             cursor_row = display_line + toolbox_rows + 1;
-            cursor_col = 7 + cursorPosition();
+            cursor_col = 7 + (cur_pos - h_scroll_offset);
         }
 
         r_write("\r\n");

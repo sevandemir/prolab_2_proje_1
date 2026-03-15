@@ -16,15 +16,11 @@ typedef struct line {
 extern line_x *headline;
 extern node_x *cursor;
 extern line_x *currentline;
+extern int undo_enabled;
 
 node_x *createnewnode(char letter);
 line_x *createnewline(void);
 void    letterEntry(char entry);
-void    cursorToLeft(void);
-void    cursorToRight(void);
-void    cursorToUp(void);
-void    cursorToDown(void);
-int     cursorPosition(void);
 void    mergeLines(void);
 void    deleteLetter(void);
 void    addnewline(void);

@@ -1,7 +1,6 @@
 #ifndef UNDO_STACK_H
 #define UNDO_STACK_H
 
-// ─── İşlem türleri ────────────────────────────────────────────────────────────
 typedef enum {
     OP_INSERT_CHAR,
     OP_DELETE_CHAR,
@@ -10,20 +9,22 @@ typedef enum {
     OP_REPLACE
 } OpType;
 
-// ─── Tek bir undo kaydı ───────────────────────────────────────────────────────
 typedef struct UndoRecord {
     OpType  type;
     int     line_index;
     int     col;
-    char   *text;           // Silinen/eklenen metin (kopyası)
+    int     end_line_index;  // ← yeni
+    int     end_col;         // ← yeni
+    char   *text;
     struct UndoRecord *next;
 } UndoRecord;
 
-// ─── Stack ────────────────────────────────────────────────────────────────────
 typedef struct {
     UndoRecord *top;
     int         size;
 } UndoStack;
+
+extern UndoStack *undo;
 
 UndoStack  *undo_stack_create();
 void        undo_stack_destroy(UndoStack *stack);
@@ -31,4 +32,4 @@ void        undo_push(UndoStack *stack, OpType type, int line, int col, const ch
 UndoRecord *undo_pop(UndoStack *stack);
 void        undo_record_destroy(UndoRecord *rec);
 
-#endif // UNDO_STACK_H
+#endif

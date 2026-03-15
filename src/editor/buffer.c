@@ -1,10 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "buffer.h"
+#include "../undo/undo_stack.h"
 
 line_x *headline    = NULL;
 node_x *cursor      = NULL;
 line_x *currentline = NULL;
+int     undo_enabled = 1;
 
 node_x *createnewnode(char letter) {
     node_x *newnode = malloc(sizeof(node_x));
@@ -23,6 +25,17 @@ line_x *createnewline() {
 }
 
 void letterEntry(char entry) {
+    if (undo && undo_enabled) {
+        char text[2] = {entry, '\0'};
+        int col = 0;
+        node_x *tmp = currentline->dummynode;
+        while (tmp != cursor) { col++; tmp = tmp->next; }
+        int line = 0;
+        line_x *tl = headline;
+        while (tl != NULL && tl != currentline) { line++; tl = tl->nextline; }
+        undo_push(undo, OP_INSERT_CHAR, line, col, text);
+    }
+
     node_x *newnode = createnewnode(entry);
     newnode->next = cursor->next;
     newnode->prev = cursor;
@@ -30,48 +43,6 @@ void letterEntry(char entry) {
         cursor->next->prev = newnode;
     cursor->next = newnode;
     cursor = newnode;
-}
-
-void cursorToLeft() {
-    if (cursor != currentline->dummynode)
-        cursor = cursor->prev;
-}
-
-void cursorToRight() {
-    if (cursor->next != NULL)
-        cursor = cursor->next;
-}
-
-int cursorPosition() {
-    int count = 0;
-    node_x *temp = currentline->dummynode;
-    while (temp != cursor) {
-        temp = temp->next;
-        count++;
-    }
-    return count;
-}
-
-void cursorToUp() {
-    int pos = cursorPosition();
-    if (currentline->prevline == NULL) return;
-    currentline = currentline->prevline;
-    cursor = currentline->dummynode;
-    for (int i = 0; i < pos; i++) {
-        if (cursor->next == NULL) break;
-        cursor = cursor->next;
-    }
-}
-
-void cursorToDown() {
-    int pos = cursorPosition();
-    if (currentline->nextline == NULL) return;
-    currentline = currentline->nextline;
-    cursor = currentline->dummynode;
-    for (int i = 0; i < pos; i++) {
-        if (cursor->next == NULL) break;
-        cursor = cursor->next;
-    }
 }
 
 void mergeLines() {
@@ -103,11 +74,29 @@ void mergeLines() {
 void deleteLetter() {
     if (cursor == currentline->dummynode) {
         if (currentline->prevline != NULL) {
+            if (undo && undo_enabled) {
+                int line = 0;
+                line_x *tl = headline;
+                while (tl != NULL && tl != currentline) { line++; tl = tl->nextline; }
+                undo_push(undo, OP_DELETE_LINE, line, 0, NULL);
+            }
             mergeLines();
             return;
         }
         return;
     }
+
+    if (undo && undo_enabled) {
+        char text[2] = {cursor->letter, '\0'};
+        int col = 0;
+        node_x *tmp = currentline->dummynode;
+        while (tmp != cursor) { col++; tmp = tmp->next; }
+        int line = 0;
+        line_x *tl = headline;
+        while (tl != NULL && tl != currentline) { line++; tl = tl->nextline; }
+        undo_push(undo, OP_DELETE_CHAR, line, col, text);
+    }
+
     node_x *deletednode  = cursor;
     node_x *targetcursor = cursor->prev;
     if (targetcursor == NULL) return;
@@ -120,6 +109,13 @@ void deleteLetter() {
 }
 
 void addnewline() {
+    if (undo && undo_enabled) {
+        int line = 0;
+        line_x *tl = headline;
+        while (tl != NULL && tl != currentline) { line++; tl = tl->nextline; }
+        undo_push(undo, OP_INSERT_LINE, line, 0, NULL);
+    }
+
     line_x *newline = createnewline();
 
     newline->prevline = currentline;
@@ -129,9 +125,9 @@ void addnewline() {
     currentline->nextline = newline;
 
     if (cursor->next != NULL) {
-        newline->dummynode->next   = cursor->next;
-        cursor->next->prev         = newline->dummynode;
-        cursor->next               = NULL;
+        newline->dummynode->next = cursor->next;
+        cursor->next->prev       = newline->dummynode;
+        cursor->next             = NULL;
     }
 
     currentline = newline;
