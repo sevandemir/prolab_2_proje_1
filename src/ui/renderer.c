@@ -71,9 +71,9 @@ void renderer_draw(int terminal_rows, int terminal_cols) {
     }
 
     int display_line = 1;
-    int cursor_row   = toolbox_rows + 2;
-    int cursor_col   = 7;
-    int line_idx     = scroll_offset;
+    int cursor_row = toolbox_rows + 2;
+    int cursor_col = 7;
+    int line_idx = scroll_offset;
 
     char tmp[64];
     while (templine != NULL && display_line <= max_lines) {

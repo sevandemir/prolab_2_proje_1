@@ -57,9 +57,9 @@ void search_find(const char *query) {
             if (str_match_ci(buf + col, len - col, query, query_len)) {
                 SearchMatch *m = malloc(sizeof(SearchMatch));
                 m->line_index = line_idx;
-                m->col        = col;
-                m->len        = query_len;
-                m->next       = NULL;
+                m->col = col;
+                m->len = query_len;
+                m->next = NULL;
 
                 if (search_matches == NULL) {
                     search_matches = m;
