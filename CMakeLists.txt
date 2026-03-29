@@ -8,12 +8,11 @@ set(SOURCES
         src/undo/undo_stack.c
         src/editor/buffer.c
         src/editor/cursor.c
-        src/editor/search.c
+        src/search/search.c
         src/editor/selection.c
         src/editor/editor.c
         src/ui/toolbox.c
         src/ui/renderer.c
-        src/io/file_io.c
         src/io/file_manager.c
 )
 

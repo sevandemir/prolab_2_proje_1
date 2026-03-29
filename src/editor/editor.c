@@ -5,468 +5,276 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <ctype.h>
+#include "cursor.h"
 
-typedef struct ClipLine {
-    char *text;
-    struct ClipLine *next;
-} ClipLine;
+/* ================================================================
+   PANO — basit statik tampon, bağlı liste YOK
+   ================================================================ */
+#define CLIPBOARD_MAX 65536
+static char clipboard_buf[CLIPBOARD_MAX] = {0};
+static int  clipboard_len = 0;          /* 0 ise pano boş */
 
-static ClipLine *clipboard = NULL;
-
-static void clipboard_clear() {
-    ClipLine *cur = clipboard;
-    while (cur != NULL) {
-        ClipLine *next = cur->next;
-        free(cur->text);
-        free(cur);
-        cur = next;
-    }
-    clipboard = NULL;
-}
-
+/* ================================================================
+   YARDIMCI: sıralama
+   ================================================================ */
 static int node_before(node_x *a, node_x *b) {
-    node_x *tmp = a;
-    while (tmp != NULL) {
-        if (tmp == b) return 1;
-        tmp = tmp->next;
-    }
+    node_x *t = a;
+    while (t) { if (t == b) return 1; t = t->next; }
     return 0;
 }
-
 static int line_before(line_x *a, line_x *b) {
-    line_x *tmp = a;
-    while (tmp != NULL) {
-        if (tmp == b) return 1;
-        tmp = tmp->nextline;
-    }
+    line_x *t = a;
+    while (t) { if (t == b) return 1; t = t->nextline; }
     return 0;
 }
 
+/* Seçimin başlangıç/bitiş noktalarını belgede doğru sıraya koyar */
+static void normalize_sel(line_x **al, node_x **an, line_x **bl, node_x **bn) {
+    int a_first = (*al == *bl) ? node_before(*an, *bn) : line_before(*al, *bl);
+    if (!a_first) {
+        line_x *tl = *al; *al = *bl; *bl = tl;
+        node_x *tn = *an; *an = *bn; *bn = tn;
+    }
+}
+
+/* Seçili metni clipboard_buf'a yazar; '\n' = satır sonu */
+static void selection_to_clipboard(
+        line_x *al, node_x *an, line_x *bl, node_x *bn) {
+    clipboard_len = 0;
+    line_x *cl = al;
+    while (cl && clipboard_len < CLIPBOARD_MAX - 1) {
+        node_x *sn = (cl == al) ? an->next : cl->dummynode->next;
+        node_x *en = (cl == bl) ? bn->next : NULL;
+        for (node_x *t = sn; t != en && clipboard_len < CLIPBOARD_MAX - 1; t = t->next)
+            clipboard_buf[clipboard_len++] = t->letter;
+        if (cl != bl && clipboard_len < CLIPBOARD_MAX - 1)
+            clipboard_buf[clipboard_len++] = '\n';
+        if (cl == bl) break;
+        cl = cl->nextline;
+    }
+    clipboard_buf[clipboard_len] = '\0';
+}
+
+/* ================================================================
+   SEÇME / SİLME
+   ================================================================ */
 void deleteSelection() {
     if (!selection_active) return;
 
-    line_x *a_line = sel_start.line;
-    node_x *a_node = sel_start.node;
-    line_x *b_line = sel_end.line;
-    node_x *b_node = sel_end.node;
+    line_x *al = sel_start.line, *bl = sel_end.line;
+    node_x *an = sel_start.node, *bn = sel_end.node;
+    normalize_sel(&al, &an, &bl, &bn);
 
-    int a_before_b = 0;
-    if (a_line == b_line)
-        a_before_b = node_before(a_node, b_node);
-    else
-        a_before_b = line_before(a_line, b_line);
+    currentline = al;
+    cursor      = an;
 
-    if (!a_before_b) {
-        line_x *tl = a_line;
-        a_line = b_line;
-        b_line = tl;
-        node_x *tn = a_node;
-        a_node = b_node;
-        b_node = tn;
-    }
-
-    currentline = a_line;
-    cursor = a_node;
-
-    if (a_line == b_line) {
-        node_x *cur = a_node->next;
-        while (cur != NULL && cur != b_node->next) {
-            node_x *next = cur->next;
-            a_node->next = next;
-            if (next != NULL) next->prev = a_node;
-            free(cur);
-            cur = next;
+    if (al == bl) {
+        node_x *c = an->next;
+        while (c && c != bn->next) {
+            node_x *nx = c->next;
+            an->next = nx;
+            if (nx) nx->prev = an;
+            free(c); c = nx;
         }
     } else {
-        node_x *b_rest = b_node->next;
+        node_x *b_rest = bn->next;
+        node_x *c = an->next;
+        while (c) { node_x *nx = c->next; free(c); c = nx; }
+        an->next = b_rest;
+        if (b_rest) b_rest->prev = an;
 
-        node_x *cur = a_node->next;
-        while (cur != NULL) {
-            node_x *next = cur->next;
-            free(cur);
-            cur = next;
+        line_x *del = al->nextline;
+        while (del && del != bl->nextline) {
+            line_x *nx = del->nextline;
+            node_x *n  = del->dummynode;
+            while (n) { node_x *nn = n->next; free(n); n = nn; }
+            free(del); del = nx;
         }
-        a_node->next = NULL;
-
-        a_node->next = b_rest;
-        if (b_rest != NULL) b_rest->prev = a_node;
-
-        line_x *del = a_line->nextline;
-        while (del != NULL && del != b_line->nextline) {
-            line_x *next = del->nextline;
-            if (del != b_line) {
-                node_x *n = del->dummynode;
-                while (n != NULL) {
-                    node_x *nn = n->next;
-                    free(n);
-                    n = nn;
-                }
-                free(del);
-            } else {
-                node_x *n = del->dummynode;
-                while (n != NULL && n != b_rest) {
-                    node_x *nn = n->next;
-                    free(n);
-                    n = nn;
-                }
-                free(del);
-            }
-            del = next;
-        }
-
-        a_line->nextline = b_line->nextline;
-        if (b_line->nextline != NULL)
-            b_line->nextline->prevline = a_line;
+        al->nextline = bl->nextline;
+        if (bl->nextline) bl->nextline->prevline = al;
     }
-
     selection_clear();
 }
 
+/* ================================================================
+   KOPYALAMA  (CTRL+C)
+   ================================================================ */
 void copySelection() {
     if (!selection_active) return;
 
-    line_x *a_line = sel_start.line;
-    node_x *a_node = sel_start.node;
-    line_x *b_line = sel_end.line;
-    node_x *b_node = sel_end.node;
+    line_x *al = sel_start.line, *bl = sel_end.line;
+    node_x *an = sel_start.node, *bn = sel_end.node;
+    normalize_sel(&al, &an, &bl, &bn);
 
-    int a_before_b = 0;
-    if (a_line == b_line)
-        a_before_b = node_before(a_node, b_node);
-    else
-        a_before_b = line_before(a_line, b_line);
-
-    if (!a_before_b) {
-        line_x *tl = a_line;
-        a_line = b_line;
-        b_line = tl;
-        node_x *tn = a_node;
-        a_node = b_node;
-        b_node = tn;
-    }
-
-    clipboard_clear();
-
-    line_x *cur_line = a_line;
-    while (cur_line != NULL) {
-        node_x *start_node = (cur_line == a_line) ? a_node->next : cur_line->dummynode->next;
-        node_x *end_node = (cur_line == b_line) ? b_node->next : NULL;
-
-        int len = 0;
-        node_x *tmp = start_node;
-        while (tmp != end_node) {
-            len++;
-            tmp = tmp->next;
-        }
-
-        char *text = malloc(len + 1);
-        int i = 0;
-        tmp = start_node;
-        while (tmp != end_node) {
-            text[i++] = tmp->letter;
-            tmp = tmp->next;
-        }
-        text[i] = '\0';
-
-        ClipLine *cl = malloc(sizeof(ClipLine));
-        cl->text = text;
-        cl->next = NULL;
-
-        if (clipboard == NULL) {
-            clipboard = cl;
-        } else {
-            ClipLine *last = clipboard;
-            while (last->next != NULL) last = last->next;
-            last->next = cl;
-        }
-
-        if (cur_line == b_line) break;
-        cur_line = cur_line->nextline;
-    }
-    selection_clear();
+    selection_to_clipboard(al, an, bl, bn);
+    /* Seçimi koru — vurgulanmış halde kalsın */
 }
 
+/* ================================================================
+   KESME  (CTRL+X)
+   ================================================================ */
 void cutSelection() {
     if (!selection_active) return;
 
-    line_x *a_line = sel_start.line;
-    node_x *a_node = sel_start.node;
-    line_x *b_line = sel_end.line;
-    node_x *b_node = sel_end.node;
+    line_x *al = sel_start.line, *bl = sel_end.line;
+    node_x *an = sel_start.node, *bn = sel_end.node;
+    normalize_sel(&al, &an, &bl, &bn);
 
-    int a_before_b = 0;
-    if (a_line == b_line)
-        a_before_b = node_before(a_node, b_node);
-    else
-        a_before_b = line_before(a_line, b_line);
+    /* Başlangıç konumu */
+    int sl = 0; line_x *tl = headline;
+    while (tl && tl != al) { sl++; tl = tl->nextline; }
+    int sc = 0; node_x *nd = al->dummynode;
+    while (nd != an)        { sc++; nd = nd->next; }
 
-    if (!a_before_b) {
-        line_x *tl = a_line; a_line = b_line; b_line = tl;
-        node_x *tn = a_node; a_node = b_node; b_node = tn;
-    }
+    /* Panoya kopyala */
+    selection_to_clipboard(al, an, bl, bn);
 
-    // Başlangıç pozisyonunu hesapla
-    int start_line_idx = 0;
-    line_x *tl = headline;
-    while (tl != NULL && tl != a_line) { start_line_idx++; tl = tl->nextline; }
+    /* Undo için metni encode et: "CUT\0sl\0sc\0metin" → basit prefix */
+    /* Format: sl:sc: + metin (metin içinde \n olabilir, sorun değil) */
+    int tlen = clipboard_len;
+    char *enc = malloc(32 + tlen + 1);
+    int plen  = snprintf(enc, 32, "%d:%d:", sl, sc);
+    memcpy(enc + plen, clipboard_buf, tlen + 1);
 
-    int start_col = 0;
-    node_x *nd = a_line->dummynode;
-    while (nd != a_node) { start_col++; nd = nd->next; }
-
-    // Kesilen metni hem clipboard'a hem string'e yaz
-    clipboard_clear();
-    int len = 0;
-    line_x *cur_line = a_line;
-    while (cur_line != NULL) {
-        node_x *sn = (cur_line == a_line) ? a_node->next : cur_line->dummynode->next;
-        node_x *en = (cur_line == b_line) ? b_node->next : NULL;
-        node_x *tmp = sn;
-        while (tmp != en) { len++; tmp = tmp->next; }
-        if (cur_line != b_line) len++;
-        if (cur_line == b_line) break;
-        cur_line = cur_line->nextline;
-    }
-
-    char *cut_text = malloc(len + 1);
-    int pos = 0;
-    cur_line = a_line;
-    while (cur_line != NULL) {
-        node_x *sn = (cur_line == a_line) ? a_node->next : cur_line->dummynode->next;
-        node_x *en = (cur_line == b_line) ? b_node->next : NULL;
-
-        // Clipboard'a ekle
-        int line_len = 0;
-        node_x *tmp = sn;
-        while (tmp != en) { line_len++; tmp = tmp->next; }
-        char *clip_text = malloc(line_len + 1);
-        int ci = 0;
-        tmp = sn;
-        while (tmp != en) { clip_text[ci++] = tmp->letter; cut_text[pos++] = tmp->letter; tmp = tmp->next; }
-        clip_text[ci] = '\0';
-
-        ClipLine *cl = malloc(sizeof(ClipLine));
-        cl->text = clip_text;
-        cl->next = NULL;
-        if (clipboard == NULL) clipboard = cl;
-        else { ClipLine *last = clipboard; while (last->next != NULL) last = last->next; last->next = cl; }
-
-        if (cur_line != b_line) cut_text[pos++] = '\n';
-        if (cur_line == b_line) break;
-        cur_line = cur_line->nextline;
-    }
-    cut_text[pos] = '\0';
-
-    // Encode et
-    char header[64];
-    snprintf(header, sizeof(header), "%d:%d:", start_line_idx, start_col);
-    char *encoded = malloc(strlen(header) + len + 1);
-    strcpy(encoded, header);
-    memcpy(encoded + strlen(header), cut_text, len + 1);
-
-    // Sil
-    sel_start.line = a_line;
-    sel_start.node = a_node;
-    sel_end.line   = b_line;
-    sel_end.node   = b_node;
+    /* Seç ve sil */
+    sel_start.line = al; sel_start.node = an;
+    sel_end.line   = bl; sel_end.node   = bn;
     selection_active = 1;
     undo_enabled = 0;
     deleteSelection();
     undo_enabled = 1;
 
-    undo_push(undo, OP_REPLACE, 0, 0, encoded);
-    free(cut_text);
-    free(encoded);
+    undo_push(undo, OP_REPLACE, 0, 0, enc);
+    free(enc);
 }
 
+/* ================================================================
+   YAPIŞTIRMA  (CTRL+V) — iç panodan
+   ================================================================ */
 void pasteClipboard() {
-    if (clipboard == NULL) return;
+    if (clipboard_len == 0) return;
 
-    // Başlangıç pozisyonunu hesapla
-    int start_line_idx = 0;
-    line_x *tl = headline;
-    while (tl != NULL && tl != currentline) {
-        start_line_idx++;
-        tl = tl->nextline;
-    }
-
-    int start_col = 0;
-    node_x *nd = currentline->dummynode;
-    while (nd != cursor) {
-        start_col++;
-        nd = nd->next;
-    }
+    /* Başlangıç konumu */
+    int sl = 0; line_x *tl = headline;
+    while (tl && tl != currentline) { sl++; tl = tl->nextline; }
+    int sc = 0; node_x *nd = currentline->dummynode;
+    while (nd != cursor) { sc++; nd = nd->next; }
 
     undo_enabled = 0;
-
-    ClipLine *cl = clipboard;
-    while (cl != NULL) {
-        for (int i = 0; cl->text[i] != '\0'; i++)
-            letterEntry(cl->text[i]);
-        if (cl->next != NULL)
-            addnewline();
-        cl = cl->next;
+    for (int i = 0; i < clipboard_len; i++) {
+        if (clipboard_buf[i] == '\n') addnewline();
+        else                          letterEntry(clipboard_buf[i]);
     }
-
     undo_enabled = 1;
 
-    // Bitiş pozisyonunu hesapla
-    int end_line_idx = 0;
-    tl = headline;
-    while (tl != NULL && tl != currentline) {
-        end_line_idx++;
-        tl = tl->nextline;
-    }
+    /* Bitiş konumu */
+    int el = 0; tl = headline;
+    while (tl && tl != currentline) { el++; tl = tl->nextline; }
+    int ec = 0; nd = currentline->dummynode;
+    while (nd != cursor) { ec++; nd = nd->next; }
 
-    int end_col = 0;
-    nd = currentline->dummynode;
-    while (nd != cursor) {
-        end_col++;
-        nd = nd->next;
-    }
-
-    // "start_line:start_col:end_line:end_col" formatında encode et
-    char encoded[128];
-    snprintf(encoded, sizeof(encoded), "%d:%d:%d:%d",
-             start_line_idx, start_col, end_line_idx, end_col);
-
-    undo_push(undo, OP_REPLACE, 0, 0, encoded);
+    char enc[128];
+    snprintf(enc, sizeof(enc), "PASTE:%d:%d:%d:%d", sl, sc, el, ec);
+    undo_push(undo, OP_REPLACE, 0, 0, enc);
 }
 
+/* ================================================================
+   GERI AL (CTRL+Z)
+   ================================================================ */
 void performUndo() {
-    if (undo == NULL) return;
+    if (!undo) return;
     UndoRecord *rec = undo_pop(undo);
-    if (rec == NULL) return;
+    if (!rec) return;
 
     undo_enabled = 0;
 
     switch (rec->type) {
         case OP_INSERT_CHAR: {
-            line_x *target_line = headline;
-            for (int i = 0; i < rec->line_index && target_line != NULL; i++)
-                target_line = target_line->nextline;
-            if (target_line == NULL) break;
-
-            currentline = target_line;
+            line_x *t = headline;
+            for (int i = 0; i < rec->line_index && t; i++) t = t->nextline;
+            if (!t) break;
+            currentline = t;
             cursor = currentline->dummynode;
-            for (int i = 0; i < rec->col; i++)
-                if (cursor->next != NULL) cursor = cursor->next;
-            if (cursor->next != NULL) {
-                node_x *del = cursor->next;
-                cursor->next = del->next;
-                if (del->next != NULL) del->next->prev = cursor;
-                free(del);
+            for (int i = 0; i < rec->col && cursor->next; i++) cursor = cursor->next;
+            if (cursor->next) {
+                node_x *d = cursor->next;
+                cursor->next = d->next;
+                if (d->next) d->next->prev = cursor;
+                free(d);
             }
             break;
         }
         case OP_DELETE_CHAR: {
-            line_x *target_line = headline;
-            for (int i = 0; i < rec->line_index && target_line != NULL; i++)
-                target_line = target_line->nextline;
-            if (target_line == NULL) break;
-
-            currentline = target_line;
+            line_x *t = headline;
+            for (int i = 0; i < rec->line_index && t; i++) t = t->nextline;
+            if (!t) break;
+            currentline = t;
             cursor = currentline->dummynode;
-            for (int i = 0; i < rec->col - 1 && cursor->next != NULL; i++)
-                cursor = cursor->next;
-            if (rec->text != NULL)
-                letterEntry(rec->text[0]);
+            for (int i = 0; i < rec->col - 1 && cursor->next; i++) cursor = cursor->next;
+            if (rec->text) letterEntry(rec->text[0]);
             break;
         }
         case OP_INSERT_LINE: {
-            line_x *target_line = headline;
-            for (int i = 0; i < rec->line_index && target_line != NULL; i++)
-                target_line = target_line->nextline;
-            if (target_line == NULL) break;
-
-            currentline = target_line->nextline;
-            if (currentline != NULL) {
-                cursor = currentline->dummynode;
-                mergeLines();
-            }
+            line_x *t = headline;
+            for (int i = 0; i < rec->line_index && t; i++) t = t->nextline;
+            if (!t) break;
+            currentline = t->nextline;
+            if (currentline) { cursor = currentline->dummynode; mergeLines(); }
             break;
         }
         case OP_DELETE_LINE: {
-            line_x *target_line = headline;
-            for (int i = 0; i < rec->line_index && target_line != NULL; i++)
-                target_line = target_line->nextline;
-            if (target_line == NULL) break;
-
-            currentline = target_line;
+            line_x *t = headline;
+            for (int i = 0; i < rec->line_index && t; i++) t = t->nextline;
+            if (!t) break;
+            currentline = t;
             cursor = currentline->dummynode;
-            while (cursor->next != NULL) cursor = cursor->next;
+            while (cursor->next) cursor = cursor->next;
             addnewline();
             break;
         }
         case OP_REPLACE: {
-            // Format kontrolü: kaç tane ':' var
-            int colon_count = 0;
-            for (int i = 0; rec->text[i] != '\0'; i++)
-                if (rec->text[i] == ':') colon_count++;
+            if (!rec->text) break;
 
-            if (colon_count >= 3) {
-                // Yapıştırma geri al: "start_line:start_col:end_line:end_col"
+            if (strncmp(rec->text, "PASTE:", 6) == 0) {
+                /* Yapıştırmayı geri al: yapıştırılan bölgeyi sil */
                 int sl, sc, el, ec;
-                sscanf(rec->text, "%d:%d:%d:%d", &sl, &sc, &el, &ec);
+                sscanf(rec->text + 6, "%d:%d:%d:%d", &sl, &sc, &el, &ec);
 
-                line_x *start_line = headline;
-                for (int i = 0; i < sl && start_line != NULL; i++)
-                    start_line = start_line->nextline;
-                if (start_line == NULL) break;
+                line_x *sl_line = headline;
+                for (int i = 0; i < sl && sl_line; i++) sl_line = sl_line->nextline;
+                line_x *el_line = headline;
+                for (int i = 0; i < el && el_line; i++) el_line = el_line->nextline;
+                if (!sl_line || !el_line) break;
 
-                line_x *end_line = headline;
-                for (int i = 0; i < el && end_line != NULL; i++)
-                    end_line = end_line->nextline;
-                if (end_line == NULL) break;
+                node_x *sn = sl_line->dummynode;
+                for (int i = 0; i < sc && sn->next; i++) sn = sn->next;
+                node_x *en = el_line->dummynode;
+                for (int i = 0; i < ec && en->next; i++) en = en->next;
 
-                node_x *start_node = start_line->dummynode;
-                for (int i = 0; i < sc; i++)
-                    if (start_node->next != NULL) start_node = start_node->next;
-
-                node_x *end_node = end_line->dummynode;
-                for (int i = 0; i < ec; i++)
-                    if (end_node->next != NULL) end_node = end_node->next;
-
-                sel_start.line = start_line;
-                sel_start.node = start_node;
-                sel_end.line = end_line;
-                sel_end.node = end_node;
+                sel_start.line = sl_line; sel_start.node = sn;
+                sel_end.line   = el_line; sel_end.node   = en;
                 selection_active = 1;
                 deleteSelection();
+
             } else {
-                // Kesme geri al: "start_line:start_col:metin"
+                /* Kesmeyi geri al: "sl:sc:metin" → metni geri koy */
                 int sl, sc;
-                char cut_text[4096];
-                sscanf(rec->text, "%d:%d:%[^\n]", &sl, &sc, cut_text);
-                // Metindeki \n karakterlerini gerçek newline'a çevir
-                // (zaten gerçek \n olarak saklandı)
+                const char *p = rec->text;
+                sl = atoi(p); p = strchr(p, ':'); if (!p) break; p++;
+                sc = atoi(p); p = strchr(p, ':'); if (!p) break; p++;
 
-                line_x *target_line = headline;
-                for (int i = 0; i < sl && target_line != NULL; i++)
-                    target_line = target_line->nextline;
-                if (target_line == NULL) break;
-
-                currentline = target_line;
+                line_x *t = headline;
+                for (int i = 0; i < sl && t; i++) t = t->nextline;
+                if (!t) break;
+                currentline = t;
                 cursor = currentline->dummynode;
-                for (int i = 0; i < sc; i++)
-                    if (cursor->next != NULL) cursor = cursor->next;
+                for (int i = 0; i < sc && cursor->next; i++) cursor = cursor->next;
 
-                // Metni geri yapıştır
-                for (int i = 0; rec->text[i] != '\0'; i++) {
-                    // "sl:sc:" prefix'ini atla
-                    int prefix_len = 0;
-                    char tmp[64];
-                    snprintf(tmp, sizeof(tmp), "%d:%d:", sl, sc);
-                    prefix_len = strlen(tmp);
-
-                    for (int j = prefix_len; rec->text[j] != '\0'; j++) {
-                        if (rec->text[j] == '\n') {
-                            addnewline();
-                        } else {
-                            letterEntry(rec->text[j]);
-                        }
-                    }
-                    break;
+                while (*p) {
+                    if (*p == '\n') addnewline();
+                    else            letterEntry(*p);
+                    p++;
                 }
             }
             break;
@@ -476,4 +284,27 @@ void performUndo() {
 
     undo_enabled = 1;
     undo_record_destroy(rec);
+}
+
+/* ================================================================
+   YARDIMCI
+   ================================================================ */
+void deleteNode(node_x *n) {
+    if (!n || !n->prev) return;
+    node_x *prev = n->prev, *next = n->next;
+    prev->next = next;
+    if (next) next->prev = prev;
+    free(n);
+}
+
+void deleteWordLeft() {
+    if (!cursor || cursor == currentline->dummynode) return;
+    while (cursor != currentline->dummynode && isspace(cursor->letter)) {
+        node_x *d = cursor; cursor = cursor->prev;
+        d->prev->next = d->next; if (d->next) d->next->prev = d->prev; free(d);
+    }
+    while (cursor != currentline->dummynode && !isspace(cursor->letter)) {
+        node_x *d = cursor; cursor = cursor->prev;
+        d->prev->next = d->next; if (d->next) d->next->prev = d->prev; free(d);
+    }
 }

@@ -6,5 +6,5 @@ void copySelection();
 void cutSelection();
 void pasteClipboard();
 void performUndo();
-
+void deleteWordLeft();
 #endif

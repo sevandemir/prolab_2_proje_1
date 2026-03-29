@@ -37,10 +37,13 @@ void term_enable_raw_mode() {
 
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
     raw_mode_active = 1;
+    /* Bracketed paste mode: terminal yapıştırmayı ESC[200~ ... ESC[201~ ile sarar */
+    write(STDOUT_FILENO, "\033[?2004h", 8);
 }
 
 void term_disable_raw_mode() {
     if (raw_mode_active) {
+        write(STDOUT_FILENO, "\033[?2004l", 8); /* bracketed paste kapat */
         tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios);
         raw_mode_active = 0;
     }
@@ -53,27 +56,37 @@ int term_read_key() {
 
     if (read(STDIN_FILENO, &c, 1) != 1) return -1;
 
-    // CTRL + harf kombinasyonları (ASCII 1-26)
-    // Bunlar zaten doğru değerle geliyor, direkt döndür
+    // CTRL kombinasyonlarını ESC sequence'den ÖNCE yakala
+    if (c == 18)  return KEY_CTRL_R;
+    if (c == 6)  return KEY_CTRL_F;
+    if (c == 7)  return KEY_CTRL_G;
+    if (c == 3)  return KEY_CTRL_C;
+    if (c == 24) return KEY_CTRL_X;
+    if (c == 22) return KEY_CTRL_V;
+    if (c == 26) return KEY_CTRL_Z;
+    if (c == 23) return KEY_CTRL_W;
+
     // Özel tuş kontrolü: ESC ile başlayan sequence
     if (c == 27) {
-        // VTIME ile non-blocking okuma
         struct termios t;
-        tcgetattr(STDIN_FILENO, &t);
+        tcgetattr(STDIN_FILENO, &t);          // ← EKSİKTİ, bu şart
         t.c_cc[VMIN]  = 0;
-        t.c_cc[VTIME] = 1;  // 100ms
+        t.c_cc[VTIME] = 1;
         tcsetattr(STDIN_FILENO, TCSANOW, &t);
 
         unsigned char seq[4] = {0};
         int n = read(STDIN_FILENO, &seq[0], 1);
 
-        // Raw mode'a geri dön
         t.c_cc[VMIN]  = 1;
         t.c_cc[VTIME] = 0;
         tcsetattr(STDIN_FILENO, TCSANOW, &t);
 
-        if (n <= 0) return KEY_ESC;  // Ek byte gelmedi → düz ESC
+        if (n <= 0) return KEY_ESC;
 
+        // Alt+Backspace: ESC + 0x7F
+        if (seq[0] == 0x7F) return KEY_ALT_BACKSPACE;
+
+        // seq[1] sadece bir kez okunuyor
         if (read(STDIN_FILENO, &seq[1], 1) != 1) return KEY_ESC;
 
         if (seq[0] == '[') {
@@ -83,11 +96,23 @@ int term_read_key() {
                 case 'C': return KEY_RIGHT;
                 case 'D': return KEY_LEFT;
             }
-            // Sayısal sequence
             if (seq[1] >= '0' && seq[1] <= '9') {
                 unsigned char seq2;
                 read(STDIN_FILENO, &seq2, 1);
                 if (seq[1] == '3' && seq2 == '~') return KEY_DELETE;
+
+                /* Bracketed paste: ESC[200~ başlangıç, ESC[201~ bitiş */
+                if ((seq[1] == '2') && (seq2 == '0')) {
+                    unsigned char seq3, seq4;
+                    read(STDIN_FILENO, &seq3, 1);
+                    read(STDIN_FILENO, &seq4, 1);
+                    /* seq3='0' seq4='~' → paste start; seq3='1' seq4='~' → paste end */
+                    if (seq4 == '~') {
+                        if (seq3 == '0') return KEY_PASTE_START;
+                        if (seq3 == '1') return KEY_PASTE_END;
+                    }
+                }
+
                 if (seq[1] == '1' && seq2 == ';') {
                     unsigned char mod, dir;
                     read(STDIN_FILENO, &mod, 1);
@@ -113,9 +138,10 @@ int term_read_key() {
         }
         return KEY_ESC;
     }
+
     // CTRL + Backspace (genellikle 127 veya 8 gelir)
     if (c == 127) return KEY_BACKSPACE;
-    if (c == 31)  return KEY_CTRL_BACKSPACE; // CTRL+Backspace bazı terminallerde
+    if (c == 8)   return KEY_BACKSPACE;
 
     return (int)c;
 }

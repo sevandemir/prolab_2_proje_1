@@ -91,9 +91,8 @@ void search_next() {
     if (current_match->next != NULL)
         current_match = current_match->next;
     else
-        current_match = search_matches; // başa dön
+        current_match = search_matches; /* başa dön */
 
-    // İmleci eşleşmeye götür
     line_x *line = headline;
     for (int i = 0; i < current_match->line_index && line != NULL; i++)
         line = line->nextline;
@@ -101,16 +100,15 @@ void search_next() {
 
     currentline = line;
     cursor = currentline->dummynode;
-    for (int i = 0; i < current_match->col; i++)
+    /* col + len: kelimenin SONUNA konumlandır */
+    for (int i = 0; i < current_match->col + current_match->len; i++)
         if (cursor->next != NULL) cursor = cursor->next;
 }
 
 void search_prev() {
     if (current_match == NULL) return;
 
-    // Bir öncekini bul
     if (current_match == search_matches) {
-        // Sona git
         SearchMatch *last = search_matches;
         while (last->next != NULL) last = last->next;
         current_match = last;
@@ -127,7 +125,8 @@ void search_prev() {
 
     currentline = line;
     cursor = currentline->dummynode;
-    for (int i = 0; i < current_match->col; i++)
+    /* col + len: kelimenin SONUNA konumlandır */
+    for (int i = 0; i < current_match->col + current_match->len; i++)
         if (cursor->next != NULL) cursor = cursor->next;
 }
 

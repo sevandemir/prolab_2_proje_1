@@ -6,10 +6,10 @@
 static ToolboxItem items[] = {
     {"Dosya Ac",      "CTRL+O"},
     {"Kaydet",        "CTRL+S"},
-    {"Farkli Kaydet", "CTRL+SHIFT+S"},
+    {"Farkli Kaydet", "CTRL+W"},
     {"Ara",           "CTRL+F"},
     {"Git",           "CTRL+G"},
-    {"Degistir",      "CTRL+H"},
+    {"Degistir",      "CTRL+R"},
     {"Geri Al",       "CTRL+Z"},
     {"Kes",           "CTRL+X"},
     {"Kopyala",       "CTRL+C"},
@@ -19,51 +19,76 @@ static ToolboxItem items[] = {
 
 static int item_count = sizeof(items) / sizeof(items[0]);
 
-static void tb_write(const char *s) {
-    write(STDOUT_FILENO, s, strlen(s));
+/* ------------------------------------------------------------------ */
+/* Yardımcı: buf'a güvenli string kopyalama                           */
+/* ------------------------------------------------------------------ */
+static void buf_write(char *buf, int *pos, int buf_size, const char *s) {
+    int len = (int)strlen(s);
+    if (*pos + len < buf_size) {
+        memcpy(buf + *pos, s, len);
+        *pos += len;
+    }
 }
 
-void toolbox_render(int terminal_cols) {
+static void buf_char(char *buf, int *pos, int buf_size, char c) {
+    if (*pos < buf_size)
+        buf[(*pos)++] = c;
+}
+
+/* ------------------------------------------------------------------ */
+/* Renderer buffer'ına yazan yeni fonksiyon                            */
+/* ------------------------------------------------------------------ */
+void toolbox_render_to_buf(char *buf, int *pos, int buf_size, int terminal_cols) {
+    /* Üst çizgi */
+    for (int i = 0; i < terminal_cols; i++) buf_char(buf, pos, buf_size, '-');
+    buf_write(buf, pos, buf_size, "\r\n");
+
+    /* Öğeleri yan yana sığdır */
     int x = 0;
-    char buf[64];
-
-    // Üst çizgi
-    for (int i = 0; i < terminal_cols; i++) tb_write("-");
-    tb_write("\r\n");
-
-    // Öğeleri yan yana sığdır
+    char tmp[64];
     for (int i = 0; i < item_count; i++) {
-        snprintf(buf, sizeof(buf), " %s(%s) ", items[i].label, items[i].shortcut);
-        int len = strlen(buf);
+        snprintf(tmp, sizeof(tmp), " %s(%s) ", items[i].label, items[i].shortcut);
+        int len = (int)strlen(tmp);
 
         if (x + len > terminal_cols) {
-            tb_write("\r\n");
+            buf_write(buf, pos, buf_size, "\r\n");
             x = 0;
         }
-
-        tb_write(buf);
+        buf_write(buf, pos, buf_size, tmp);
         x += len;
     }
+    buf_write(buf, pos, buf_size, "\r\n");
 
-    tb_write("\r\n");
-
-    // Alt çizgi
-    for (int i = 0; i < terminal_cols; i++) tb_write("-");
-    tb_write("\r\n");
+    /* Alt çizgi */
+    for (int i = 0; i < terminal_cols; i++) buf_char(buf, pos, buf_size, '-');
+    buf_write(buf, pos, buf_size, "\r\n");
 }
 
+/* ------------------------------------------------------------------ */
+/* Geriye dönük uyumluluk – doğrudan stdout'a yaz (artık çağrılmıyor) */
+/* ------------------------------------------------------------------ */
+void toolbox_render(int terminal_cols) {
+    char buf[4096];
+    int  pos = 0;
+    toolbox_render_to_buf(buf, &pos, (int)sizeof(buf), terminal_cols);
+    write(STDOUT_FILENO, buf, pos);
+}
+
+/* ------------------------------------------------------------------ */
+/* Kaç satır kapladığını hesapla                                       */
+/* ------------------------------------------------------------------ */
 int toolbox_row_count(int terminal_cols) {
-    int rows = 2;
-    int x = 0;
+    int rows = 2;  /* üst çizgi + alt çizgi */
+    int x    = 0;
     for (int i = 0; i < item_count; i++) {
-        char buf[64];
-        snprintf(buf, sizeof(buf), " %s(%s) ", items[i].label, items[i].shortcut);
-        int len = strlen(buf);
+        char tmp[64];
+        snprintf(tmp, sizeof(tmp), " %s(%s) ", items[i].label, items[i].shortcut);
+        int len = (int)strlen(tmp);
         if (x + len > terminal_cols) {
             rows++;
             x = 0;
         }
         x += len;
     }
-    return rows;
+    return rows;  /* renderer.c'deki +1 formülü içerik satırını ekler */
 }

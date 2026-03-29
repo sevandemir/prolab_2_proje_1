@@ -81,32 +81,59 @@ void deleteLetter() {
                 undo_push(undo, OP_DELETE_LINE, line, 0, NULL);
             }
             mergeLines();
-            return;
         }
         return;
     }
 
+    /* UTF-8 karakterin tüm byte'larını bul ve sil */
+    int num_bytes = 0;
+    node_x *nd = cursor;
+    while (nd != currentline->dummynode) {
+        num_bytes++;
+        if (!IS_CONT_BYTE(nd->letter)) break; // İlk byte'a (leading byte) ulaştık
+        nd = nd->prev;
+    }
+
     if (undo && undo_enabled) {
-        char text[2] = {cursor->letter, '\0'};
+        char text[16] = {0};
+        node_x *t = nd;
+        for(int i = 0; i < num_bytes && t != NULL; i++) {
+            text[i] = t->letter;
+            t = t->next;
+        }
+
         int col = 0;
         node_x *tmp = currentline->dummynode;
-        while (tmp != cursor) { col++; tmp = tmp->next; }
+        while (tmp != nd && tmp != NULL) { col++; tmp = tmp->next; }
+        
         int line = 0;
         line_x *tl = headline;
         while (tl != NULL && tl != currentline) { line++; tl = tl->nextline; }
-        undo_push(undo, OP_DELETE_CHAR, line, col, text);
+        
+        /* Her bir byte'ı tek tek undo stack'e ekliyoruz ki baştan sona doğru eklensin ve silerken sağdan sola silinsin.
+           Ancak daha kolayı tek silme operasyonu olarak bir "OP_REPLACE" (veya OP_DELETE_CHAR dizisi) yollamak
+           Neyse OP_DELETE_CHAR string uzunluğunu desteklemiyordu. Biz sadece byte dizisi kadar POP yapacağız */
+        /* Zaten standart undo harf harf yapıyor */
+        for(int i = num_bytes - 1; i >= 0; i--) {
+            char b[2] = {text[i], '\0'};
+            undo_push(undo, OP_DELETE_CHAR, line, col + i, b);
+        }
     }
 
-    node_x *deletednode  = cursor;
-    node_x *targetcursor = cursor->prev;
-    if (targetcursor == NULL) return;
+    /* Orijinal cursor = nd->prev olsun, silmeye başlayalım */
+    for (int i = 0; i < num_bytes; i++) {
+        node_x *deletednode  = cursor;
+        node_x *targetcursor = cursor->prev;
+        if (targetcursor == NULL) break;
 
-    if (cursor->next != NULL) cursor->next->prev = cursor->prev;
-    if (cursor->prev != NULL) cursor->prev->next = cursor->next;
+        if (cursor->next != NULL) cursor->next->prev = cursor->prev;
+        if (cursor->prev != NULL) cursor->prev->next = cursor->next;
 
-    cursor = targetcursor;
-    free(deletednode);
+        cursor = targetcursor;
+        free(deletednode);
+    }
 }
+
 
 void addnewline() {
     if (undo && undo_enabled) {

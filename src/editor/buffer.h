@@ -25,4 +25,6 @@ void    mergeLines(void);
 void    deleteLetter(void);
 void    addnewline(void);
 
+#define IS_CONT_BYTE(c) (((unsigned char)(c) & 0xC0) == 0x80)
+
 #endif

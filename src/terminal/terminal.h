@@ -35,12 +35,17 @@
 #define KEY_CTRL_C      3
 #define KEY_CTRL_F      6
 #define KEY_CTRL_G      7
-#define KEY_CTRL_H      8   // Not: bazı sistemlerde backspace ile çakışır, dikkat!
+#define KEY_CTRL_O      15
+#define KEY_CTRL_R      18  // Not: bazı sistemlerde backspace ile çakışır, dikkat!
 #define KEY_CTRL_S      19
 #define KEY_CTRL_V      22
 #define KEY_CTRL_X      24
 #define KEY_CTRL_Z      26
-#define KEY_CTRL_BACKSPACE 1030
+#define KEY_CTRL_W        1040
+#define KEY_ALT_BACKSPACE  300
+#define KEY_CTRL_BACKSPACE 301
+#define KEY_PASTE_START    2000   /* ESC[200~ — terminal yapıştırma başlangıcı */
+#define KEY_PASTE_END      2001   /* ESC[201~ — terminal yapıştırma sonu       */
 
 // ─── Renk kodları ─────────────────────────────────────────────────────────────
 #define COLOR_RESET     0
