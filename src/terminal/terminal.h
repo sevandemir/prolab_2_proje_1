@@ -41,7 +41,7 @@
 #define KEY_CTRL_V      22
 #define KEY_CTRL_X      24
 #define KEY_CTRL_Z      26
-#define KEY_CTRL_W        1040
+#define KEY_CTRL_W        23
 #define KEY_ALT_BACKSPACE  300
 #define KEY_CTRL_BACKSPACE 301
 #define KEY_PASTE_START    2000   /* ESC[200~ — terminal yapıştırma başlangıcı */
@@ -91,5 +91,9 @@ void term_reset_color();
 // İmleç efekti (yanıp sönen dikey çizgi)
 void term_cursor_blink_on();
 void term_cursor_blink_off();
+
+// Sistem panosu (Windows: gerçek clipboard, Linux: iç buffer yeterli)
+void term_clipboard_set(const char *text, int len); // metni sistem panosuna gönder
+int  term_clipboard_get(char *buf, int max_len);    // sistem panosundan al (byte sayısı döner)
 
 #endif // TERMINAL_H

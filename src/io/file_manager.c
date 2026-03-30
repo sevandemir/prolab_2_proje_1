@@ -5,7 +5,11 @@
 #include <string.h>
 #include <dirent.h>
 #include <sys/stat.h>
-#include <unistd.h>
+#ifdef _WIN32
+#  include <direct.h>   /* Windows: chdir, getcwd */
+#else
+#  include <unistd.h>
+#endif
 
 FileEntry file_list[MAX_FILE_COUNT];
 int  file_count    = 0;

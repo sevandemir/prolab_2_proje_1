@@ -1,7 +1,9 @@
 #include "toolbox.h"
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
+#ifndef _WIN32
+#  include <unistd.h>
+#endif
 
 static ToolboxItem items[] = {
     {"Dosya Ac",      "CTRL+O"},
@@ -71,7 +73,8 @@ void toolbox_render(int terminal_cols) {
     char buf[4096];
     int  pos = 0;
     toolbox_render_to_buf(buf, &pos, (int)sizeof(buf), terminal_cols);
-    write(STDOUT_FILENO, buf, pos);
+    fwrite(buf, 1, pos, stdout);
+    fflush(stdout);
 }
 
 /* ------------------------------------------------------------------ */

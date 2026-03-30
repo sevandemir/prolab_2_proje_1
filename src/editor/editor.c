@@ -2,6 +2,7 @@
 #include "buffer.h"
 #include "selection.h"
 #include "../undo/undo_stack.h"
+#include "../terminal/terminal.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -108,6 +109,7 @@ void copySelection() {
     normalize_sel(&al, &an, &bl, &bn);
 
     selection_to_clipboard(al, an, bl, bn);
+    term_clipboard_set(clipboard_buf, clipboard_len); /* Windows panoya gönder */
     /* Seçimi koru — vurgulanmış halde kalsın */
 }
 
@@ -129,6 +131,7 @@ void cutSelection() {
 
     /* Panoya kopyala */
     selection_to_clipboard(al, an, bl, bn);
+    term_clipboard_set(clipboard_buf, clipboard_len); /* Windows panoya gönder */
 
     /* Undo için metni encode et: "CUT\0sl\0sc\0metin" → basit prefix */
     /* Format: sl:sc: + metin (metin içinde \n olabilir, sorun değil) */
@@ -153,6 +156,16 @@ void cutSelection() {
    YAPIŞTIRMA  (CTRL+V) — iç panodan
    ================================================================ */
 void pasteClipboard() {
+    /* Windows panosunu önce iç buffer'a yükle (diğer uygulamadan yapıştırma) */
+    {
+        static char sys_buf[CLIPBOARD_MAX];
+        int slen = term_clipboard_get(sys_buf, CLIPBOARD_MAX);
+        if (slen > 0) {
+            memcpy(clipboard_buf, sys_buf, slen);
+            clipboard_buf[slen] = '\0';
+            clipboard_len = slen;
+        }
+    }
     if (clipboard_len == 0) return;
 
     /* Başlangıç konumu */
@@ -197,11 +210,15 @@ void performUndo() {
             currentline = t;
             cursor = currentline->dummynode;
             for (int i = 0; i < rec->col && cursor->next; i++) cursor = cursor->next;
-            if (cursor->next) {
+            /* Leading byte'i ve ardindan gelen UTF-8 devam byte'larini atomik sil */
+            while (cursor->next) {
                 node_x *d = cursor->next;
                 cursor->next = d->next;
                 if (d->next) d->next->prev = cursor;
                 free(d);
+                /* Sonraki byte devam byte'i degilse dur */
+                if (!cursor->next || !IS_CONT_BYTE((unsigned char)cursor->next->letter))
+                    break;
             }
             break;
         }
@@ -212,7 +229,11 @@ void performUndo() {
             currentline = t;
             cursor = currentline->dummynode;
             for (int i = 0; i < rec->col - 1 && cursor->next; i++) cursor = cursor->next;
-            if (rec->text) letterEntry(rec->text[0]);
+            /* Tum UTF-8 byte'larini geri ekle (tek veya cok baytli karakter) */
+            if (rec->text) {
+                for (int i = 0; (unsigned char)rec->text[i] != 0; i++)
+                    letterEntry(rec->text[i]);
+            }
             break;
         }
         case OP_INSERT_LINE: {
@@ -298,13 +319,21 @@ void deleteNode(node_x *n) {
 }
 
 void deleteWordLeft() {
-    if (!cursor || cursor == currentline->dummynode) return;
-    while (cursor != currentline->dummynode && isspace(cursor->letter)) {
-        node_x *d = cursor; cursor = cursor->prev;
-        d->prev->next = d->next; if (d->next) d->next->prev = d->prev; free(d);
+    if (!cursor || cursor == currentline->dummynode) {
+        /* If at the start of a line, delete the newline character (merge lines) */
+        if (currentline->prevline != NULL) {
+            deleteLetter();
+        }
+        return;
     }
-    while (cursor != currentline->dummynode && !isspace(cursor->letter)) {
-        node_x *d = cursor; cursor = cursor->prev;
-        d->prev->next = d->next; if (d->next) d->next->prev = d->prev; free(d);
+    
+    // Delete trailing spaces first
+    while (cursor != currentline->dummynode && isspace((unsigned char)cursor->letter)) {
+        deleteLetter();
+    }
+    
+    // Then delete non-spaces until we hit a space or start of line
+    while (cursor != currentline->dummynode && !isspace((unsigned char)cursor->letter)) {
+        deleteLetter();
     }
 }

@@ -25,7 +25,9 @@ line_x *createnewline() {
 }
 
 void letterEntry(char entry) {
-    if (undo && undo_enabled) {
+    /* UTF-8 devam byte'ları (0x80-0xBF) için ayrı undo kaydı tutma.
+       Bunlar leading byte'nın tek kaydıyla atomik olarak geri alınır. */
+    if (undo && undo_enabled && !IS_CONT_BYTE((unsigned char)entry)) {
         char text[2] = {entry, '\0'};
         int col = 0;
         node_x *tmp = currentline->dummynode;
@@ -109,15 +111,9 @@ void deleteLetter() {
         int line = 0;
         line_x *tl = headline;
         while (tl != NULL && tl != currentline) { line++; tl = tl->nextline; }
-        
-        /* Her bir byte'ı tek tek undo stack'e ekliyoruz ki baştan sona doğru eklensin ve silerken sağdan sola silinsin.
-           Ancak daha kolayı tek silme operasyonu olarak bir "OP_REPLACE" (veya OP_DELETE_CHAR dizisi) yollamak
-           Neyse OP_DELETE_CHAR string uzunluğunu desteklemiyordu. Biz sadece byte dizisi kadar POP yapacağız */
-        /* Zaten standart undo harf harf yapıyor */
-        for(int i = num_bytes - 1; i >= 0; i--) {
-            char b[2] = {text[i], '\0'};
-            undo_push(undo, OP_DELETE_CHAR, line, col + i, b);
-        }
+
+        /* Tüm UTF-8 byte'larını tek bir undo kaydıyla sakla (atomik geri alma) */
+        undo_push(undo, OP_DELETE_CHAR, line, col, text);
     }
 
     /* Orijinal cursor = nd->prev olsun, silmeye başlayalım */

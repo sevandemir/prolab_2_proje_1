@@ -83,8 +83,8 @@ int term_read_key() {
 
         if (n <= 0) return KEY_ESC;
 
-        // Alt+Backspace: ESC + 0x7F
-        if (seq[0] == 0x7F) return KEY_ALT_BACKSPACE;
+        // Alt+Backspace: ESC + 0x7F veya ESC + 0x08
+        if (seq[0] == 0x7F || seq[0] == 0x08) return KEY_ALT_BACKSPACE;
 
         // seq[1] sadece bir kez okunuyor
         if (read(STDIN_FILENO, &seq[1], 1) != 1) return KEY_ESC;
@@ -198,5 +198,10 @@ void term_cursor_blink_on() {
 void term_cursor_blink_off() {
     write(STDOUT_FILENO, "\033[?12l", 6);
 }
+
+// Linux: sistem panosu entegrasyonu yok (X11/Wayland gerektirir)
+// İç buffer (clipboard_buf edilebilir.c) yeterlidir
+void term_clipboard_set(const char *text, int len) { (void)text; (void)len; }
+int  term_clipboard_get(char *buf, int max_len)    { (void)buf; (void)max_len; return 0; }
 
 #endif // !_WIN32

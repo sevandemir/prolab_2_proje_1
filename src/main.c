@@ -1,6 +1,10 @@
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
+#ifndef _WIN32
+#  include <unistd.h>
+#else
+#  include <direct.h>   /* Windows: chdir */
+#endif
 #include "terminal/terminal.h"
 #include "editor/buffer.h"
 #include "ui/renderer.h"
@@ -10,6 +14,16 @@
 #include "editor/editor.h"
 #include "io/file_manager.h"
 #include "search/search.h"
+
+/* Platform bağımsız ham yazma yardımcısı */
+static void raw_write(const char *s, int len) {
+#ifdef _WIN32
+    fwrite(s, 1, len, stdout);
+    fflush(stdout);
+#else
+    write(STDOUT_FILENO, s, len);
+#endif
+}
 
 int browser_mode;
 
@@ -35,7 +49,7 @@ static void read_input(char *buf, int max_len, int terminal_rows, int terminal_c
 
 int main(void) {
     term_enable_raw_mode();
-    write(STDOUT_FILENO, "\033[?1049h", 8);
+    raw_write("\033[?1049h", 8);
 
     term_cursor_blink_on();
 
@@ -64,10 +78,10 @@ int main(void) {
             // Kaydet modunda alt bilgiyi güncelle
             if (browser_mode == 2) {
                 char prompt[512];
-                snprintf(prompt, sizeof(prompt),
+                int plen = snprintf(prompt, sizeof(prompt),
                          "\033[%d;1H\033[2K Gezin ve CTRL+S ile kaydet | Dosya adi: %s",
                          rows, save_filename_buf);
-                write(STDOUT_FILENO, prompt, strlen(prompt));
+                raw_write(prompt, plen);
             }
 
             int key = term_read_key();
@@ -125,6 +139,11 @@ int main(void) {
                 if (search_active || replace_active) { search_clear(); navigate_mode = 0; }
                 if (selection_active) deleteSelection();
                 else deleteLetter();
+                break;
+            case KEY_ALT_BACKSPACE:
+                if (search_active || replace_active) { search_clear(); navigate_mode = 0; }
+                if (selection_active) deleteSelection();
+                else deleteWordLeft();
                 break;
             case KEY_UP:
                 if (navigate_mode && search_matches != NULL) {
@@ -312,7 +331,7 @@ int main(void) {
     term_reset_color();
     term_show_cursor();
     term_disable_raw_mode();
-    write(STDOUT_FILENO, "\033[?1049l", 8);
-    write(STDOUT_FILENO, "Cikis yapildi.\n", 15);
+    raw_write("\033[?1049l", 8);
+    raw_write("Cikis yapildi.\n", 15);
     return 0;
 }

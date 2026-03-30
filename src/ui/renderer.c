@@ -5,7 +5,9 @@
 #include "../search/search.h"
 #include "../io/file_manager.h"
 #include <stdio.h>
-#include <unistd.h>
+#ifndef _WIN32
+#  include <unistd.h>
+#endif
 #include <string.h>
 
 static char render_buf[65536];
@@ -28,7 +30,12 @@ static void r_char(char c) {
 }
 
 static void r_flush() {
+#ifdef _WIN32
+    fwrite(render_buf, 1, render_pos, stdout);
+    fflush(stdout);
+#else
     write(STDOUT_FILENO, render_buf, render_pos);
+#endif
     render_pos = 0;
 }
 
@@ -165,7 +172,8 @@ void renderer_draw(int terminal_rows, int terminal_cols) {
     r_write(tmp);
 
     r_flush();
-    write(STDOUT_FILENO, "\033[?25h", 6);
+    r_write("\033[?25h");
+    r_flush();
 }
 
 
@@ -234,6 +242,7 @@ void renderer_draw_filebrowser(int terminal_rows, int terminal_cols) {
     r_write(scroll_info);
 
     r_flush();
-    write(STDOUT_FILENO, "\033[?25h", 6);
+    r_write("\033[?25h");
+    r_flush();
 }
 
