@@ -20,5 +20,7 @@ void selection_shift_left();
 void selection_shift_right();
 void selection_shift_up();
 void selection_shift_down();
+void selection_word_right();
+void selection_word_left();
 
 #endif

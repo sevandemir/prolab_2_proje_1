@@ -131,3 +131,17 @@ void selection_shift_down() {
     sel_end.line = currentline;
     sel_end.node = cursor;
 }
+
+void selection_word_right() {
+    selection_start();
+    cursor_skip_word_right();
+    sel_end.line = currentline;
+    sel_end.node = cursor;
+}
+
+void selection_word_left() {
+    selection_start();
+    cursor_skip_word_left();
+    sel_end.line = currentline;
+    sel_end.node = cursor;
+}

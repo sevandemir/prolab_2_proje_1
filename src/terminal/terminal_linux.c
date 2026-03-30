@@ -58,13 +58,13 @@ int term_read_key() {
 
     // CTRL kombinasyonlarını ESC sequence'den ÖNCE yakala
     if (c == 18)  return KEY_CTRL_R;
-    if (c == 6)  return KEY_CTRL_F;
-    if (c == 7)  return KEY_CTRL_G;
-    if (c == 3)  return KEY_CTRL_C;
-    if (c == 24) return KEY_CTRL_X;
-    if (c == 22) return KEY_CTRL_V;
-    if (c == 26) return KEY_CTRL_Z;
-    if (c == 23) return KEY_CTRL_W;
+    if (c == 6)   return KEY_CTRL_F;
+    if (c == 7)   return KEY_CTRL_G;
+    if (c == 3)   return KEY_CTRL_C;
+    if (c == 24)  return KEY_CTRL_X;
+    if (c == 22)  return KEY_CTRL_V;
+    if (c == 26)  return KEY_CTRL_Z;
+    if (c == 23)  return KEY_CTRL_W;
 
     // Özel tuş kontrolü: ESC ile başlayan sequence
     if (c == 27) {
@@ -95,10 +95,33 @@ int term_read_key() {
                 case 'B': return KEY_DOWN;
                 case 'C': return KEY_RIGHT;
                 case 'D': return KEY_LEFT;
+                case 'c': return KEY_SHIFT_RIGHT;
+                case 'd': return KEY_SHIFT_LEFT;
             }
             if (seq[1] >= '0' && seq[1] <= '9') {
                 unsigned char seq2;
                 read(STDIN_FILENO, &seq2, 1);
+
+                // --- Legacy Debian / urxvt / xterm Fallbacks ---
+                if (seq2 == 'C') {
+                    if (seq[1] == '5') return KEY_CTRL_RIGHT;
+                    if (seq[1] == '6') return KEY_CTRL_SHIFT_RIGHT;
+                    if (seq[1] == '2') return KEY_SHIFT_RIGHT;
+                }
+                if (seq2 == 'D') {
+                    if (seq[1] == '5') return KEY_CTRL_LEFT;
+                    if (seq[1] == '6') return KEY_CTRL_SHIFT_LEFT;
+                    if (seq[1] == '2') return KEY_SHIFT_LEFT;
+                }
+                if (seq2 == 'A') {
+                    if (seq[1] == '5') return KEY_CTRL_UP;
+                    if (seq[1] == '2') return KEY_SHIFT_UP;
+                }
+                if (seq2 == 'B') {
+                    if (seq[1] == '5') return KEY_CTRL_DOWN;
+                    if (seq[1] == '2') return KEY_SHIFT_DOWN;
+                }
+
                 if (seq[1] == '3' && seq2 == '~') return KEY_DELETE;
 
                 /* Bracketed paste: ESC[200~ başlangıç, ESC[201~ bitiş */
@@ -135,7 +158,35 @@ int term_read_key() {
                     }
                 }
             }
+            return KEY_ESC;
+        } else if (seq[0] == 'O') {
+            switch (seq[1]) {
+                case 'A': return KEY_UP;
+                case 'B': return KEY_DOWN;
+                case 'C': return KEY_RIGHT;
+                case 'D': return KEY_LEFT;
+                case 'a': return KEY_CTRL_UP;
+                case 'b': return KEY_CTRL_DOWN;
+                case 'c': return KEY_CTRL_RIGHT;
+                case 'd': return KEY_CTRL_LEFT;
+            }
+            if (seq[1] >= '0' && seq[1] <= '9') {
+                unsigned char seq2;
+                read(STDIN_FILENO, &seq2, 1);
+                if (seq2 == 'c' || seq2 == 'C') {
+                    if (seq[1] == '5') return KEY_CTRL_RIGHT;
+                    if (seq[1] == '6') return KEY_CTRL_SHIFT_RIGHT;
+                    if (seq[1] == '2') return KEY_SHIFT_RIGHT;
+                }
+                if (seq2 == 'd' || seq2 == 'D') {
+                    if (seq[1] == '5') return KEY_CTRL_LEFT;
+                    if (seq[1] == '6') return KEY_CTRL_SHIFT_LEFT;
+                    if (seq[1] == '2') return KEY_SHIFT_LEFT;
+                }
+            }
+            return KEY_ESC;
         }
+
         return KEY_ESC;
     }
 
@@ -200,7 +251,7 @@ void term_cursor_blink_off() {
 }
 
 // Linux: sistem panosu entegrasyonu yok (X11/Wayland gerektirir)
-// İç buffer (clipboard_buf edilebilir.c) yeterlidir
+// İç buffer yeterlidir
 void term_clipboard_set(const char *text, int len) { (void)text; (void)len; }
 int  term_clipboard_get(char *buf, int max_len)    { (void)buf; (void)max_len; return 0; }
 

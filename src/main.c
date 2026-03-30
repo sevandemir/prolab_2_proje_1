@@ -26,6 +26,8 @@ static void raw_write(const char *s, int len) {
 }
 
 int browser_mode;
+int exit_prompt_active = 0;
+int exit_after_save = 0;
 
 static void read_input(char *buf, int max_len, int terminal_rows, int terminal_cols) {
     int pos = strlen(buf);
@@ -89,6 +91,7 @@ int main(void) {
             if (key == KEY_ESC) {
                 browser_mode = 0;
                 save_filename_buf[0] = '\0';
+                exit_after_save = 0; // İptal edildi
             } else if (key == KEY_UP) {
                 fm_cursor_up();
             } else if (key == KEY_DOWN) {
@@ -111,6 +114,7 @@ int main(void) {
                     fm_save_file(current_filename);
                     save_filename_buf[0] = '\0';
                     browser_mode = 0;
+                    if (exit_after_save) running = 0;
                 }
             }
             continue;
@@ -123,10 +127,25 @@ int main(void) {
             navigate_mode = 0;
             if (search_active || replace_active) {
                 search_clear();
+            } else if (exit_prompt_active) {
+                exit_prompt_active = 0; // İptal
             } else {
-                running = 0;
+                exit_prompt_active = 1;
             }
             continue;
+        }
+
+        if (exit_prompt_active) {
+            if (key == 'y' || key == 'Y') {
+                exit_prompt_active = 0;
+                key = KEY_CTRL_S; // Kaydetme komutunu simüle et
+                exit_after_save = 1; // Kayıt başarılı olunca çıksın
+            } else if (key == 'n' || key == 'N') {
+                running = 0; // Direkt çıkış
+                continue;
+            } else {
+                continue; // Y veya N dışında tuşlara basılırsa bekle
+            }
         }
 
         switch (key) {
@@ -177,9 +196,21 @@ int main(void) {
                     cursorToRight();
                 }
                 break;
+            case KEY_CTRL_LEFT:
+                //selection_clear();
+                cursor_skip_word_left();
+                break;
+            case KEY_CTRL_RIGHT:
+                //selection_clear();
+                cursor_skip_word_right();
+                break;
             case KEY_SHIFT_LEFT: selection_shift_left();
                 break;
             case KEY_SHIFT_RIGHT: selection_shift_right();
+                break;
+            case KEY_CTRL_SHIFT_LEFT: selection_word_left();
+                break;
+            case KEY_CTRL_SHIFT_RIGHT: selection_word_right();
                 break;
             case KEY_SHIFT_UP: selection_shift_up();
                 break;
@@ -248,6 +279,7 @@ int main(void) {
                 if (current_filename[0] != '\0') {
                     // Zaten dosya adı var, direkt kaydet
                     fm_save_file(current_filename);
+                    if (exit_after_save) running = 0;
                 } else {
                     // Önce dosya adı al
                     save_active = 1;
@@ -260,6 +292,8 @@ int main(void) {
                         file_scroll = 0;
                         fm_read_dir();
                         browser_mode = 2;
+                    } else {
+                        exit_after_save = 0; // Dosya adı iptal edildi
                     }
                 }
                 break;
@@ -322,8 +356,7 @@ int main(void) {
                     if (search_active || replace_active) { search_clear(); navigate_mode = 0; }
                     letterEntry((char) key);
                 }
-                break;
-        }
+                break;        }
     }
 
     undo_stack_destroy(undo);

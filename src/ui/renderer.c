@@ -150,6 +150,8 @@ void renderer_draw(int terminal_rows, int terminal_cols) {
         char stmp[320];
         snprintf(stmp, sizeof(stmp), " Dosya adi: %s", save_filename_buf);
         r_write(stmp);
+    } else if (exit_prompt_active) {
+        r_write(" Metni kaydetmek ister misiniz? (Y/N)");
     } else if (replace_active) {
         char stmp[320];
         snprintf(stmp, sizeof(stmp), " Yeni kelime: %s", replace_query);
@@ -166,6 +168,8 @@ void renderer_draw(int terminal_rows, int terminal_cols) {
     // 4. İmleci konumlandır
     if (save_active) {
         snprintf(tmp, sizeof(tmp), "\033[%d;%dH", terminal_rows, (int)(13 + strlen(save_filename_buf)));
+    } else if (exit_prompt_active) {
+        snprintf(tmp, sizeof(tmp), "\033[%d;%dH", terminal_rows, 40); // Sorunun yanına imleci koy (veya gizle)
     } else {
         snprintf(tmp, sizeof(tmp), "\033[%d;%dH", cursor_row, cursor_col);
     }
